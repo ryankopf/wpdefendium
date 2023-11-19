@@ -45,16 +45,21 @@ function wpdefendium_options() {
                 <input type="submit" name="Submit" class="button-primary" value="Save Changes" />
             </p>
         </form>
+          <form method="post" action="">
+              <?php wp_nonce_field('wpdefendium_check_spam'); ?>
+              <input type="hidden" name="action" value="check_spam">
+              <input type="submit" class="button-secondary" value="Check Pending Comments for Spam">
+          </form>
     </div>
     <?php
 }
 
 add_filter('preprocess_comment', 'wpdefendium_check_comment_for_spam', 10, 1);
 
-function wpdefendium_check_comment_for_spam($commentdata) {
+function wpdefendium_is_comment_spam($commentdata) {
     $api_key = get_option('wpdefendium_api_key');
     if (empty($api_key)) {
-        return $commentdata;
+        return false;
     }
 
     $content = $commentdata['comment_content'];
@@ -68,21 +73,55 @@ function wpdefendium_check_comment_for_spam($commentdata) {
     ));
 
     if (is_wp_error($response)) {
-        // Optionally, log error or notify admin
-        return $commentdata;
+        return false;
     }
 
     $response_body = wp_remote_retrieve_body($response);
     $result = json_decode($response_body);
 
-    if ($result && isset($result->result) && $result->result) {
-        // Mark the comment as spam
+    return ($result && isset($result->result) && $result->result);
+}
+
+function wpdefendium_check_comment_for_spam($commentdata) {
+    $is_spam = wpdefendium_is_comment_spam($commentdata);
+    if ($is_spam) {
         add_action('wp_insert_comment', 'wpdefendium_mark_comment_as_spam', 10, 2);
     }
-
     return $commentdata;
 }
 
 function wpdefendium_mark_comment_as_spam($comment_ID, $comment) {
     wp_spam_comment($comment_ID);
+}
+// ADD SETTINGS LINK TO PLUGIN PAGE
+function wpdefendium_add_settings_link($links) {
+    $settings_link = '<a href="options-general.php?page=wpdefendium">' . __('Settings') . '</a>';
+    array_unshift($links, $settings_link);
+    return $links;
+}
+
+$plugin = plugin_basename(__FILE__);
+add_filter("plugin_action_links_$plugin", 'wpdefendium_add_settings_link');
+
+// FUNCTION FOR THE CHECK PENDING COMMENTS FOR SPAM BUTTON
+add_action('admin_init', 'wpdefendium_process_check_spam');
+
+function wpdefendium_process_check_spam() {
+    if (isset($_POST['action']) && $_POST['action'] == 'check_spam' && check_admin_referer('wpdefendium_check_spam')) {
+        $pending_comments = get_comments(array('status' => 'hold'));
+        foreach ($pending_comments as $comment) {
+            $commentdata = array(
+                'comment_ID' => $comment->comment_ID,
+                'comment_content' => $comment->comment_content
+            );
+            // Adapted spam check call
+            $is_spam = wpdefendium_is_comment_spam($commentdata);
+            if ($is_spam) {
+                wp_spam_comment($comment->comment_ID);
+            }
+        }
+        // Redirect to avoid resubmission
+        wp_redirect(add_query_arg(array('page' => 'wpdefendium', 'spam_checked' => '1'), admin_url('options-general.php')));
+        exit;
+    }
 }
