@@ -4,6 +4,8 @@
  * Description: Checks comments for spam using the Defendium API.
  * Version: 1.0
  * Author: Ryan Kopf
+ * Author URI: https://www.defendium.com
+ * License: MIT
  */
 
 if (!defined('ABSPATH')) {
@@ -39,7 +41,7 @@ function wpdefendium_options() {
         <form name="form1" method="post" action="">
             <?php wp_nonce_field('wpdefendium_update_options'); ?>
             <p><strong>API Key:</strong></p>
-            <p><input type="text" name="wpdefendium_api_key" value="<?php echo esc_attr($api_key); ?>" size="20"></p>
+            <p><input type="text" name="wpdefendium_api_key" value="<?php echo esc_attr($api_key); ?>" size="40"></p>
             <hr />
             <p class="submit">
                 <input type="submit" name="Submit" class="button-primary" value="Save Changes" />
